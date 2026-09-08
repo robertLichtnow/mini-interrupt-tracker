@@ -1,0 +1,12 @@
+## Interface: 120100
+## Title: Mini Interrupt Tracker
+## Notes: Tracks interrupts used in your group.
+## Author:
+## Version: 0.1.0
+## SavedVariables: MiniInterruptTrackerDB
+
+Data.lua
+Comm.lua
+Bars.lua
+Config.lua
+Core.lua
