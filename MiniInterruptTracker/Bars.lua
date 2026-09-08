@@ -291,6 +291,19 @@ function Bars.Init()
 	Bars.ApplyPosition()
 	Bars.SetLocked(ns.db.barsLocked)
 	Bars.RefreshRoster()
+
+	-- "Checking..." members become stale purely by elapsed time (no event
+	-- fires when the timeout passes), so poll for that transition.
+	C_Timer.NewTicker(1, function()
+		if not ns.db or ns.db.testMode then return end
+		for _, member in ipairs(Bars.currentList) do
+			if not member.tracked and not member.stale and ns.Comm.IsStale(member.fullName) then
+				Bars.RefreshRoster()
+				return
+			end
+		end
+	end)
+
 	local debugTick = 0
 	C_Timer.NewTicker(0.05, function()
 		local now = GetTime()
