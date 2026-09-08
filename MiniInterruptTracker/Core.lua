@@ -6,6 +6,7 @@ ns.VERSION = C_AddOns.GetAddOnMetadata(ADDON_NAME, "Version") or "0"
 local DEFAULTS = {
 	showInOpenWorld = true,
 	showInMythicPlus = true,
+	hideNoAddon = false,
 	barsLocked = false,
 	reverseBarGrowth = false,
 	testMode = false,
@@ -17,7 +18,7 @@ local DEFAULTS = {
 }
 
 local configFrame = CreateFrame("Frame", "MiniInterruptTrackerConfigFrame", UIParent, "BasicFrameTemplateWithInset")
-configFrame:SetSize(340, 450)
+configFrame:SetSize(340, 480)
 configFrame:SetPoint("CENTER")
 configFrame:SetMovable(true)
 configFrame:EnableMouse(true)

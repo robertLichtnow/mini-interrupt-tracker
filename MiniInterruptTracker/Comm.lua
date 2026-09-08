@@ -101,12 +101,14 @@ function Comm.IsStale(fullName)
 	return (GetTime() - entry.lastSeen) > STALE_TIMEOUT
 end
 
--- Probe ticker: only the party leader pings, and only outside an active key.
+-- Probe ticker: every member with the addon pings independently (not just
+-- the party leader) so discovery doesn't depend on any single member --
+-- e.g. the leader -- having the addon, and keeps running through an active
+-- key in case someone enables the addon mid-dungeon.
 local pingTicker
 
 local function ShouldPing()
-	return IsInGroup() and not IsInRaid() and UnitIsGroupLeader("player")
-		and not C_ChallengeMode.IsChallengeModeActive()
+	return IsInGroup() and not IsInRaid()
 end
 
 local function StartPingTicker()
@@ -123,9 +125,8 @@ local function StopPingTicker()
 end
 
 function Comm.EvaluatePingState()
-	-- Only the leader actually sends pings, but every member needs its own
-	-- "checking..." grace period to start as soon as we're in a party --
-	-- otherwise non-leader clients never mark an absent member stale.
+	-- Every member's own "checking..." grace period starts as soon as we're
+	-- in a party, independent of when our own first ping actually fires.
 	if IsInGroup() and not IsInRaid() then
 		ns.firstProbeAt = ns.firstProbeAt or GetTime()
 	else
@@ -146,16 +147,13 @@ local function OnAddonMessage(prefix, message, _channel, sender)
 
 	local msgType, rest = message:match("^(%u+):(.*)$")
 	if msgType == "PING" then
-		-- Only the leader pings, so this is also the only way other members
-		-- ever learn the leader's own specID -- register the sender here,
-		-- not just on PONG replies.
+		-- A PING also carries the sender's specID, so register them
+		-- directly instead of only learning about them via a PONG reply.
 		local version, specID = rest:match("^(.-):(%d+)$")
 		if version and specID then
 			UpdateRoster(fullSender, version, tonumber(specID))
 		end
-		if not UnitIsGroupLeader("player") then
-			Comm.Send("PONG:" .. ns.VERSION .. ":" .. tostring(Comm.GetMySpecID()))
-		end
+		Comm.Send("PONG:" .. ns.VERSION .. ":" .. tostring(Comm.GetMySpecID()))
 	elseif msgType == "PONG" then
 		local version, specID = rest:match("^(.-):(%d+)$")
 		if version and specID then

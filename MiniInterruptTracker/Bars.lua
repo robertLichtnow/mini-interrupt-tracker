@@ -19,26 +19,46 @@ end)
 
 Bars.rowPool = {}
 Bars.currentList = {}
-Bars.memberState = {} -- [fullName] = { spellID, endTime, duration }
+Bars.memberState = {} -- [fullName .. "#" .. spellID] = { spellID, endTime, duration }
+
+-- A character can have more than one trackable interrupt, each ticking its
+-- own cooldown independently, so state is keyed per (character, ability)
+-- rather than per character.
+local function StateKey(fullName, spellID)
+	return fullName .. "#" .. spellID
+end
 
 -- Returns the member's active (unexpired) cooldown state, or nil if ready.
 -- Shared by row rendering and sorting so both agree on what "ready" means.
 local function GetActiveCooldown(member)
 	if member.testCooldown then return nil end
-	local state = Bars.memberState[member.fullName]
+	local key = StateKey(member.fullName, member.baseSpellID)
+	local state = Bars.memberState[key]
 	if state and state.endTime <= GetTime() then
 		-- Cooldown already elapsed since this state was recorded -- stale, drop it.
-		Bars.memberState[member.fullName] = nil
+		Bars.memberState[key] = nil
 		state = nil
 	end
 	return state
 end
 
+-- Demo roster for Test Mode. Mirrors the real interrupts-list shape so the
+-- same row-building logic exercises multi-interrupt characters too; the
+-- second Testpal ability is a fictional demo cooldown, not real game data.
 local TEST_MEMBERS = {
-	{ shortName = "Testwarr", class = "WARRIOR", specName = "Arms", role = "melee", cooldown = 10, baseSpellID = 6552 },
-	{ shortName = "Testpal", class = "PALADIN", specName = "Protection", role = "tank", cooldown = 15, baseSpellID = 96231 },
-	{ shortName = "Testhunter", class = "HUNTER", specName = "Marksmanship", role = "ranged", cooldown = 24, baseSpellID = 147362 },
-	{ shortName = "Testevoker", class = "EVOKER", specName = "Devastation", role = "ranged", cooldown = 20, baseSpellID = 351338 },
+	{ shortName = "Testwarr", class = "WARRIOR", specName = "Arms", role = "melee", interrupts = {
+		{ spellID = 6552, cooldown = 10 },
+	}},
+	{ shortName = "Testpal", class = "PALADIN", specName = "Protection", role = "tank", interrupts = {
+		{ spellID = 96231, cooldown = 15 },
+		{ spellID = 31935, cooldown = 8 },
+	}},
+	{ shortName = "Testhunter", class = "HUNTER", specName = "Marksmanship", role = "ranged", interrupts = {
+		{ spellID = 147362, cooldown = 24 },
+	}},
+	{ shortName = "Testevoker", class = "EVOKER", specName = "Devastation", role = "ranged", interrupts = {
+		{ spellID = 351338, cooldown = 20 },
+	}},
 }
 
 local function CreateRowFrame(parent)
@@ -189,26 +209,31 @@ local function BuildMemberList()
 			local entry = ns.roster[fullName]
 			if entry and entry.specID and ns.specData[entry.specID] then
 				local spec = ns.specData[entry.specID]
-				table.insert(list, {
-					fullName = fullName,
-					shortName = (UnitName(unit)),
-					tracked = true,
-					class = spec.class,
-					specName = spec.spec,
-					role = spec.role,
-					cooldown = spec.cooldown,
-					baseSpellID = spec.spellID,
-					versionMismatch = entry.version ~= ns.VERSION,
-				})
+				for _, interrupt in ipairs(spec.interrupts) do
+					table.insert(list, {
+						fullName = fullName,
+						shortName = (UnitName(unit)),
+						tracked = true,
+						class = spec.class,
+						specName = spec.spec,
+						role = spec.role,
+						cooldown = interrupt.cooldown,
+						baseSpellID = interrupt.spellID,
+						versionMismatch = entry.version ~= ns.VERSION,
+					})
+				end
 			elseif entry and entry.specID then
 				-- Known addon user, but their spec has no trackable interrupt -- drop the row.
 			else
-				table.insert(list, {
-					fullName = fullName,
-					shortName = (UnitName(unit)),
-					tracked = false,
-					stale = ns.Comm.IsStale(fullName),
-				})
+				local stale = ns.Comm.IsStale(fullName)
+				if not (stale and ns.db.hideNoAddon) then
+					table.insert(list, {
+						fullName = fullName,
+						shortName = (UnitName(unit)),
+						tracked = false,
+						stale = stale,
+					})
+				end
 			end
 		end
 	end
@@ -218,20 +243,21 @@ local function BuildMemberList()
 end
 
 local function BuildTestList()
-	local now = GetTime()
 	local list = {}
 	for _, m in ipairs(TEST_MEMBERS) do
-		table.insert(list, {
-			fullName = "Test-" .. m.shortName,
-			shortName = m.shortName,
-			tracked = true,
-			class = m.class,
-			specName = m.specName,
-			role = m.role,
-			cooldown = m.cooldown,
-			baseSpellID = m.baseSpellID,
-			testCooldown = m.cooldown,
-		})
+		for _, interrupt in ipairs(m.interrupts) do
+			table.insert(list, {
+				fullName = "Test-" .. m.shortName,
+				shortName = m.shortName,
+				tracked = true,
+				class = m.class,
+				specName = m.specName,
+				role = m.role,
+				cooldown = interrupt.cooldown,
+				baseSpellID = interrupt.spellID,
+				testCooldown = interrupt.cooldown,
+			})
+		end
 	end
 	return list
 end
@@ -274,7 +300,7 @@ function Bars.OnKickReceived(fullName, spellID, timestamp, duration)
 	-- timestamp is the sender's own GetTime(), which runs on a per-client
 	-- clock with no shared epoch -- comparing it against our local GetTime()
 	-- produces a huge, meaningless offset. Anchor to receipt time instead.
-	Bars.memberState[fullName] = {
+	Bars.memberState[StateKey(fullName, spellID)] = {
 		spellID = spellID,
 		endTime = GetTime() + duration,
 		duration = duration,
