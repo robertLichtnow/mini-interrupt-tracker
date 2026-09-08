@@ -67,10 +67,12 @@ function ns.Core.RecomputeVisibility()
 		return
 	end
 
-	local inOpenWorld = select(2, IsInInstance()) == "none"
-	local inMythicPlus = C_ChallengeMode.IsChallengeModeActive()
+	local _, instanceType, difficultyID = GetInstanceInfo()
+	local inOpenWorld = instanceType == "none"
+	-- difficultyID 23 = Mythic (plain 5-man), 8 = Mythic Keystone (M+).
+	local inMythicDungeon = instanceType == "party" and (difficultyID == 23 or difficultyID == 8)
 
-	local shouldShow = (ns.db.showInOpenWorld and inOpenWorld) or (ns.db.showInMythicPlus and inMythicPlus)
+	local shouldShow = (ns.db.showInOpenWorld and inOpenWorld) or (ns.db.showInMythicPlus and inMythicDungeon)
 	ns.Bars.SetShown(shouldShow)
 end
 

@@ -40,7 +40,7 @@ function ns.Config.Build(frame)
 	end)
 	checkOpenWorld:SetPoint("TOPLEFT", content, "TOPLEFT", 16, -32)
 
-	local checkMythicPlus = CreateCheckbox(frame, "Show in Mythic+", "showInMythicPlus", function()
+	local checkMythicPlus = CreateCheckbox(frame, "Show in Mythic Dungeons (incl. Mythic+)", "showInMythicPlus", function()
 		ns.Core.RecomputeVisibility()
 	end)
 	checkMythicPlus:SetPoint("TOPLEFT", checkOpenWorld, "BOTTOMLEFT", 0, -8)
