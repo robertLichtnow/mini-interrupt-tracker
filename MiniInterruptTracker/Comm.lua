@@ -146,11 +146,15 @@ local function OnAddonMessage(prefix, message, _channel, sender)
 			UpdateRoster(fullSender, version, tonumber(specID))
 		end
 	elseif msgType == "KICK" then
-		local spellID, timestamp = rest:match("^(%d+):([%d%.]+)$")
-		spellID, timestamp = tonumber(spellID), tonumber(timestamp)
+		local spellID, timestamp, duration = rest:match("^(%d+):([%d%.]+):([%d%.]+)$")
+		if not spellID then
+			-- Legacy (pre-measured-duration) senders only send spellID:timestamp.
+			spellID, timestamp = rest:match("^(%d+):([%d%.]+)$")
+		end
+		spellID, timestamp, duration = tonumber(spellID), tonumber(timestamp), tonumber(duration)
 		MarkSeen(fullSender)
 		if spellID and timestamp and ns.Bars then
-			ns.Bars.OnKickReceived(fullSender, spellID, timestamp)
+			ns.Bars.OnKickReceived(fullSender, spellID, timestamp, duration)
 		end
 	end
 end
@@ -166,10 +170,16 @@ local function OnSpellCastSucceeded(unit, _castGUID, spellID)
 
 	if not ns.spellIDToCooldown[spellID] then return end
 
+	-- Note: C_Spell.GetSpellCooldown()'s numeric fields are wrapped as
+	-- "secret" values by the client and can't be compared/used in arithmetic
+	-- by addon code (throws a taint error), so live per-character cooldown
+	-- measurement isn't possible here -- fall back to the static table.
+	local duration = ns.spellIDToCooldown[spellID]
+
 	local now = GetTime()
-	Comm.Send("KICK:" .. spellID .. ":" .. now)
+	Comm.Send("KICK:" .. spellID .. ":" .. now .. ":" .. duration)
 	if ns.Bars then
-		ns.Bars.OnKickReceived(Comm.GetMyFullName(), spellID, now)
+		ns.Bars.OnKickReceived(Comm.GetMyFullName(), spellID, now, duration)
 	end
 end
 

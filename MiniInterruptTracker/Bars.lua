@@ -250,8 +250,8 @@ function Bars.RelayoutAll()
 	container:SetSize(db.barWidth, count * db.barHeight + (count - 1) * db.barSpacing)
 end
 
-function Bars.OnKickReceived(fullName, spellID, timestamp)
-	local duration = ns.spellIDToCooldown[spellID]
+function Bars.OnKickReceived(fullName, spellID, timestamp, duration)
+	duration = duration or ns.spellIDToCooldown[spellID]
 	if not duration then return end
 	Bars.memberState[fullName] = {
 		spellID = spellID,
@@ -259,7 +259,7 @@ function Bars.OnKickReceived(fullName, spellID, timestamp)
 		duration = duration,
 	}
 	if ns.db and ns.db.debug then
-		print(("|cff40ff40[MIT debug]|r OnKickReceived stored state for %s: spellID=%d duration=%d"):format(
+		print(("|cff40ff40[MIT debug]|r OnKickReceived stored state for %s: spellID=%d duration=%.2f"):format(
 			fullName, spellID, duration))
 	end
 	Bars.RefreshRoster()
