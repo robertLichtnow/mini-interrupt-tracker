@@ -21,6 +21,19 @@ Bars.rowPool = {}
 Bars.currentList = {}
 Bars.memberState = {} -- [fullName] = { spellID, endTime, duration }
 
+-- Returns the member's active (unexpired) cooldown state, or nil if ready.
+-- Shared by row rendering and sorting so both agree on what "ready" means.
+local function GetActiveCooldown(member)
+	if member.testCooldown then return nil end
+	local state = Bars.memberState[member.fullName]
+	if state and state.endTime <= GetTime() then
+		-- Cooldown already elapsed since this state was recorded -- stale, drop it.
+		Bars.memberState[member.fullName] = nil
+		state = nil
+	end
+	return state
+end
+
 local TEST_MEMBERS = {
 	{ shortName = "Testwarr", class = "WARRIOR", specName = "Arms", role = "melee", cooldown = 10, baseSpellID = 6552 },
 	{ shortName = "Testpal", class = "PALADIN", specName = "Protection", role = "tank", cooldown = 15, baseSpellID = 96231 },
@@ -112,12 +125,7 @@ local function ApplyMemberData(row, member)
 		row.bar:SetStatusBarColor(0.8, 0.8, 0.8)
 	end
 
-	local state = not member.testCooldown and Bars.memberState[member.fullName] or nil
-	if state and state.endTime <= GetTime() then
-		-- Cooldown already elapsed since this state was recorded -- stale, drop it.
-		Bars.memberState[member.fullName] = nil
-		state = nil
-	end
+	local state = GetActiveCooldown(member)
 	if state then
 		row.icon:SetTexture(C_Spell.GetSpellTexture(state.spellID))
 		row.duration, row.endTime = state.duration, state.endTime
@@ -141,10 +149,20 @@ local function RowComparator(a, b)
 	if not a.tracked then
 		return (a.shortName or "") < (b.shortName or "")
 	end
+
+	-- Ready members sort before members on cooldown; among those on
+	-- cooldown, soonest-ready sorts first.
+	local stateA, stateB = GetActiveCooldown(a), GetActiveCooldown(b)
+	if (stateA == nil) ~= (stateB == nil) then
+		return stateA == nil
+	end
+	if stateA and stateB and stateA.endTime ~= stateB.endTime then
+		return stateA.endTime < stateB.endTime
+	end
+
 	if a.cooldown ~= b.cooldown then return a.cooldown < b.cooldown end
 	local pa, pb = ns.ROLE_PRIORITY[a.role], ns.ROLE_PRIORITY[b.role]
 	if pa ~= pb then return pa < pb end
-	if a.specName ~= b.specName then return a.specName < b.specName end
 	return (a.shortName or "") < (b.shortName or "")
 end
 
@@ -316,6 +334,7 @@ function Bars.Init()
 			print(("|cff40ff40[MIT debug]|r tick: containerShown=%s barsInPool=%d"):format(
 				tostring(container:IsShown()), #Bars.rowPool))
 		end
+		local needsReorder = false
 		for i, row in ipairs(Bars.rowPool) do
 			if row:IsShown() then
 				if row.testCooldown then
@@ -331,6 +350,7 @@ function Bars.Init()
 						row.statusText:SetText("READY")
 						row.statusText:SetTextColor(0.1, 1, 0.1, 1)
 						row.duration, row.endTime = nil, nil
+						needsReorder = true
 					else
 						local value = remaining / row.duration
 						row.bar:SetValue(value)
@@ -345,6 +365,12 @@ function Bars.Init()
 					print(("|cff40ff40[MIT debug]|r row %d: no duration set (idle/ready)"):format(i))
 				end
 			end
+		end
+
+		-- A row just became ready -- resort so it moves into the ready
+		-- group instead of sitting in its old on-cooldown position.
+		if needsReorder then
+			Bars.RefreshRoster()
 		end
 	end)
 end
