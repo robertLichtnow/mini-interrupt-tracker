@@ -253,9 +253,12 @@ end
 function Bars.OnKickReceived(fullName, spellID, timestamp, duration)
 	duration = duration or ns.spellIDToCooldown[spellID]
 	if not duration then return end
+	-- timestamp is the sender's own GetTime(), which runs on a per-client
+	-- clock with no shared epoch -- comparing it against our local GetTime()
+	-- produces a huge, meaningless offset. Anchor to receipt time instead.
 	Bars.memberState[fullName] = {
 		spellID = spellID,
-		endTime = timestamp + duration,
+		endTime = GetTime() + duration,
 		duration = duration,
 	}
 	if ns.db and ns.db.debug then

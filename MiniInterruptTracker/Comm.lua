@@ -56,7 +56,7 @@ function Comm.Send(message)
 end
 
 function Comm.SendPing()
-	Comm.Send("PING:" .. ns.VERSION)
+	Comm.Send("PING:" .. ns.VERSION .. ":" .. tostring(Comm.GetMySpecID()))
 	ns.firstProbeAt = ns.firstProbeAt or GetTime()
 end
 
@@ -123,6 +123,15 @@ local function StopPingTicker()
 end
 
 function Comm.EvaluatePingState()
+	-- Only the leader actually sends pings, but every member needs its own
+	-- "checking..." grace period to start as soon as we're in a party --
+	-- otherwise non-leader clients never mark an absent member stale.
+	if IsInGroup() and not IsInRaid() then
+		ns.firstProbeAt = ns.firstProbeAt or GetTime()
+	else
+		ns.firstProbeAt = nil
+	end
+
 	if ShouldPing() then
 		StartPingTicker()
 	else
@@ -137,6 +146,13 @@ local function OnAddonMessage(prefix, message, _channel, sender)
 
 	local msgType, rest = message:match("^(%u+):(.*)$")
 	if msgType == "PING" then
+		-- Only the leader pings, so this is also the only way other members
+		-- ever learn the leader's own specID -- register the sender here,
+		-- not just on PONG replies.
+		local version, specID = rest:match("^(.-):(%d+)$")
+		if version and specID then
+			UpdateRoster(fullSender, version, tonumber(specID))
+		end
 		if not UnitIsGroupLeader("player") then
 			Comm.Send("PONG:" .. ns.VERSION .. ":" .. tostring(Comm.GetMySpecID()))
 		end

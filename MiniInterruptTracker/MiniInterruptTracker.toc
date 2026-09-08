@@ -2,7 +2,7 @@
 ## Title: Mini Interrupt Tracker
 ## Notes: Tracks interrupts used in your group.
 ## Author:
-## Version: 0.1.1
+## Version: 0.1.2
 ## SavedVariables: MiniInterruptTrackerDB
 
 Data.lua
