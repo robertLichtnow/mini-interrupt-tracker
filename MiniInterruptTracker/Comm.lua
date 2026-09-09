@@ -14,6 +14,16 @@ local function GetNormalizedRealm()
 	return (GetNormalizedRealmName())
 end
 
+-- UnitName() deliberately returns the realm un-normalized (spaces/dashes
+-- intact, e.g. "Tarren Mill"), while sender names from CHAT_MSG_ADDON and
+-- GetNormalizedRealmName() are already normalized (e.g. "TarrenMill"). Any
+-- fullName built from a unit token for a cross-realm party member must be
+-- normalized the same way, or it silently fails to match the roster entry
+-- populated from that member's own PING/PONG/KICK messages.
+local function NormalizeRealmName(realm)
+	return (realm:gsub("[%s%-]", ""))
+end
+
 local function NormalizeSenderName(name)
 	if not name then return nil end
 	if not name:find("%-") then
@@ -27,6 +37,8 @@ local function GetUnitFullName(unit)
 	if not name then return nil end
 	if not realm or realm == "" then
 		realm = GetNormalizedRealm()
+	else
+		realm = NormalizeRealmName(realm)
 	end
 	return name .. "-" .. realm
 end
